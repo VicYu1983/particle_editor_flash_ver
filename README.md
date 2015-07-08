@@ -1,6 +1,6 @@
 # particle_editor_flash_ver
 
-一個簡單的, flex製做的粒子編輯器
+一個簡單的, flex製作的粒子編輯器
 
 因為只輸出資料模型
 
