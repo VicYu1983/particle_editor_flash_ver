@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:HGroup	xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			xmlns:s="library://ns.adobe.com/flex/spark" 
+			xmlns:mx="library://ns.adobe.com/flex/mx">
+			   
+	
+	<fx:Script>
+		<![CDATA[
+		
+		import flash.events.Event;
+		import mx.events.FlexEvent;
+		
+		private var _name:String;
+		private var _onChange:Function; 
+		
+		public function setting( name:String, max:Number, min:Number, stepSize:Number, value:Number, onChange:Function ):void {
+			slr_value.maximum = max;
+			slr_value.minimum = min;
+			
+			ns_value.maximum = max;
+			ns_value.minimum = min;
+			ns_value.stepSize = stepSize;
+			
+			_name = name;
+			lbl_name.text = name;
+			
+			this.value = value;
+			
+			_onChange = onChange;
+		}
+		
+		public function set value( value:Number ):void {
+			slr_value.value = value;
+			ns_value.value = value;
+		}
+		
+		public function get value():Number{
+			return slr_value.value;
+		}
+		
+		private function onValueChange( e:Event ):void{
+			var value:Number = e.currentTarget.value;
+			this.value = value;
+			if ( _onChange == null )	throw Error( 'you should use setting function for run this component' );
+			_onChange( id, value );
+		}
+		]]>
+	</fx:Script>
+	<mx:Slider id="slr_value" width="165" change="onValueChange(event)"></mx:Slider>
+	<s:NumericStepper id="ns_value" width="60" change="onValueChange(event)"></s:NumericStepper>
+	<s:Label id="lbl_name"></s:Label>
+</s:HGroup>

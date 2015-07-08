@@ -1,0 +1,974 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009"
+                       xmlns:s="library://ns.adobe.com/flex/spark"
+                       xmlns:mx="library://ns.adobe.com/flex/mx"
+					   xmlns:client="org.vic.flex.*"
+					   applicationComplete="flexInit(event)">
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<s:Scale id="openPanelByScale"
+			duration="200"
+			scaleXFrom=".4" scaleXTo="1"
+			scaleYFrom=".4" scaleYTo="1"></s:Scale>
+		<s:Scale id="closePanelByScale"
+			duration="200"
+			scaleXFrom="1" scaleXTo="0"
+			scaleYFrom="1" scaleYTo="0"></s:Scale>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+		import flash.display.Bitmap;
+		import flash.display.BitmapData;
+		import flash.display.BlendMode;
+		import flash.display.Loader;
+		import flash.display.LoaderInfo;
+		import flash.events.Event;
+		import flash.events.IOErrorEvent;
+		import flash.events.MouseEvent;
+		import flash.external.ExternalInterface;
+		import flash.geom.Vector3D;
+		import flash.net.FileFilter;
+		import flash.net.FileReference;
+		import flash.net.navigateToURL;
+		import flash.net.URLLoader;
+		import flash.net.URLRequest;
+		import flash.net.URLRequestHeader;
+		import flash.net.URLRequestMethod;
+		import flash.net.URLVariables;
+		import flash.utils.ByteArray;
+		import flash.utils.getDefinitionByName;
+		import flash.utils.getQualifiedClassName;
+		import mx.collections.ArrayCollection;
+		import mx.controls.Alert;
+		import mx.events.CloseEvent;
+		import mx.events.EffectEvent;
+		import mx.events.FlexEvent;
+		import mx.graphics.codec.PNGEncoder;
+		import mx.utils.Base64Decoder;
+		import mx.utils.Base64Encoder;
+		import org.vic.event.VicEvent;
+		import org.vic.particle.force.DragForce;
+		import org.vic.particle.force.Force;
+		import org.vic.particle.force.GravityForce;
+		import org.vic.particle.core.Particle;
+		import org.vic.utils.LoaderQueue;
+		
+		private var _entry:Entry;
+		
+		private var _currentLevel:int = 0;
+		private var _currentForce:Force;
+		private var _currentTextureId:int;
+		private var _currentTexture:BitmapData;
+		
+		private var _saveDataUrl:String = 'http://ad.arcww.com.tw/VicDemo/particleEditorNew/actions/saveData.php';
+		private var _deleteDataUrl:String = 'http://ad.arcww.com.tw/VicDemo/particleEditorNew/actions/deleteData.php';
+		private var _getDataUrl:String = 'http://ad.arcww.com.tw/VicDemo/particleEditorNew/actions/getData.php';
+		private var _getListUrl:String = 'http://ad.arcww.com.tw/VicDemo/particleEditorNew/actions/getList.php';
+		
+		private var _saveDataPhpName:String = '1000';
+		private var _getDataPhpName:String = '2000';
+		private var _getListPhpName:String = '3000';
+		private var _deleteDataName:String = '4000';
+		
+		private var _noSaveNameError:String = '2002';
+		private var _noDeleteNameError:String = '4002';
+		private var _unknownError:String = '4100';
+		private var _noDataError:String = '3002';
+		
+		private function flexInit( e:FlexEvent ):void {
+			ssr_deagAge.setting( '死亡年齡', 200, 1, 1, 10, onAllSsrChange );
+			ssr_rdeagAge.setting( '隨機死亡', 200, 0, 1, 0, onAllSsrChange );
+			ssr_scaleIn.setting( '放大進場', 200, 0, 1, 0, onAllSsrChange );
+			ssr_scaleOut.setting( '縮小退場', 200, 0, 1, 0, onAllSsrChange );
+			ssr_alphaIn.setting( '淡入進場', 200, 0, 1, 0, onAllSsrChange );
+			ssr_alphaOut.setting( '淡出退場', 200, 0, 1, 0, onAllSsrChange );
+			ssr_rposx.setting( '隨機位置x', 1000, 0, 1, 0, onAllSsrChange );
+			ssr_rposy.setting( '隨機位置y', 1000, 0, 1, 0, onAllSsrChange );
+			ssr_rposz.setting( '隨機位置z', 1000, 0, 1, 0, onAllSsrChange );
+			ssr_velx.setting( '速度x', 100, -100, 1, 0, onAllSsrChange );
+			ssr_vely.setting( '速度y', 100, -100, 1, 0, onAllSsrChange );
+			ssr_velz.setting( '速度z', 100, -100, 1, 0, onAllSsrChange );
+			ssr_rvelx.setting( '隨機速度x', 100, 0, 1, 0, onAllSsrChange );
+			ssr_rvely.setting( '隨機速度y', 100, 0, 1, 0, onAllSsrChange );
+			ssr_rvelz.setting( '隨機速度z', 100, 0, 1, 0, onAllSsrChange );
+			ssr_sizex.setting( '縮放x', 10, 0, .1, 1, onAllSsrChange );
+			ssr_sizey.setting( '縮放y', 10, 0, .1, 1, onAllSsrChange );
+			ssr_sizez.setting( '縮放z', 10, 0, .1, 1, onAllSsrChange );
+			ssr_rsizex.setting( '隨機縮放x', 10, 0, .1, 0, onAllSsrChange );
+			ssr_rsizey.setting( '隨機縮放y', 10, 0, .1, 0, onAllSsrChange );
+			ssr_rsizez.setting( '隨機縮放z', 10, 0, .1, 0, onAllSsrChange );
+			ssr_rotx.setting( '旋轉角度x', 180, -180, 1, 0, onAllSsrChange );
+			ssr_roty.setting( '旋轉角度y', 180, -180, 1, 0, onAllSsrChange );
+			ssr_rotz.setting( '旋轉角度z', 180, -180, 1, 0, onAllSsrChange );
+			ssr_rrotx.setting( '隨機角度x', 180, -180, 1, 0, onAllSsrChange );
+			ssr_rroty.setting( '隨機角度y', 180, -180, 1, 0, onAllSsrChange );
+			ssr_rrotz.setting( '隨機角度z', 180, -180, 1, 0, onAllSsrChange );
+			ssr_rotVelx.setting( '角速度x', 100, -100, 1, 0, onAllSsrChange );
+			ssr_rotVely.setting( '角速度y', 100, -100, 1, 0, onAllSsrChange );
+			ssr_rotVelz.setting( '角速度z', 100, -100, 1, 0, onAllSsrChange );
+			onCpClick( null );
+			
+			_entry = new Entry();
+			_entry.addEventListener( 'addTexture', onAddTexture );
+			fc.addChild( _entry );
+			fc.mouseChildren = false;
+			fc.mouseEnabled = false;
+			onDdlCreateTypeChange( null );
+			
+			LoaderQueue.inst.addEventListener( Event.COMPLETE, onLoaderQueueComplete );
+		}
+		
+		private function onLoaderQueueComplete( e:VicEvent ):void {
+			var bm:Bitmap = e.data as Bitmap;
+			_entry.processTexture( 'web', bm.bitmapData );
+		}
+		
+		private function onAddTexture( e:VicEvent ):void {
+			var tn:String = e.data[0];
+			var w:Number = e.data[1];
+			var h:Number = e.data[2];
+			var bd:BitmapData = e.data[3];
+			var tid:int = _dp_textureList.length;
+			
+			_dp_textureList.addItem( { name:tn, size:w + '_' + h, tid:tid, bd:bd } );
+		}
+		
+		private function onDdlCreateTypeChange( e:Event ):void {
+			switch( ddl_createType.selectedIndex ) {
+				case 0:
+					createTypeA();
+					break;
+				case 1:
+					createTypeB();
+			}
+			setValueToPanel( _entry.getParticle() );
+		}
+		
+		private function onDdlBlendModeChange( e:Event ):void {
+			var mode:String = ddl_blendMode.selectedItem.value;
+			getCurrentLevel().textureMode = mode;
+		}
+		
+		private function createTypeA():void {
+			_entry.createEmitter();
+			ddl_particleTree.dataProvider = _particleTreeA;
+			ddl_particleTree.selectedIndex = 0;
+		}
+		
+		private function createTypeB():void {
+			_entry.createEmitterSprayEmitter();
+			ddl_particleTree.dataProvider = _particleTreeB;
+			ddl_particleTree.selectedIndex = 0;
+		}
+		
+		private function onBtnAddForceClick( e:MouseEvent ):void {
+			var className:String = ddl_forceType.selectedItem.className;
+			var power:Number = ns_forcePower.value;
+			var clazz:Class = getDefinitionByName( className ) as Class;
+			
+			var force:Force = new clazz( power );
+			getCurrentLevel().addForce( force );
+			setForceToPanel( getCurrentLevel());
+			closeForcePanel();
+			GravityForce, DragForce
+		}
+		
+		private function onBtnDeleteClick( e:MouseEvent ):void {
+			_dp_textureList.removeItemAt( _currentTextureId );
+			_entry.removeTexture( _currentTexture );
+			
+			//重設貼圖的tid
+			var i:int = 0;
+			var max:int = _dp_textureList.length;
+			var item:Object;
+			for (; i < max; ++i ) {
+				item = _dp_textureList.getItemAt( i );
+				item.tid = i;
+			}
+			closeDeleteTexturePanel();
+		}
+		
+		private function openForcePanel():void {
+			p_particlePanel.enabled = false;
+			fc.visible = false;
+			tw_forcePanel.visible = true;
+			openPanelByScaleUsingFunc( tw_forcePanel );
+		}
+		
+		private function closeForcePanel():void {
+			closePanelByScaleUsingFunc( tw_forcePanel, function():void {
+				tw_forcePanel.visible = false;
+				p_particlePanel.enabled = true;
+				fc.visible = true;
+			});
+		}
+		
+		private function openEditForcePanel():void {
+			p_particlePanel.enabled = false;
+			fc.visible = false;
+			tw_editForce.visible = true;
+			openPanelByScaleUsingFunc( tw_editForce );
+		}
+		
+		private function closeEditForcePanel():void {
+			closePanelByScaleUsingFunc( tw_editForce, function():void {
+				tw_editForce.visible = false;
+				p_particlePanel.enabled = true;
+				fc.visible = true;
+			});
+		}
+		
+		private function openDeleteTexturePanel():void {
+			fc.visible = false;
+			p_particlePanel.enabled = false;
+			tw_deleteTexturePanel.visible = true;
+			openPanelByScaleUsingFunc( tw_deleteTexturePanel );
+		}
+		
+		private function closeDeleteTexturePanel():void {
+			closePanelByScaleUsingFunc( tw_deleteTexturePanel, function():void {
+				tw_deleteTexturePanel.visible = false;
+				p_particlePanel.enabled = true;
+				fc.visible = true;
+			});
+		}
+		
+		private function openParticleSettingPanel():void {
+			fc.visible = false;
+			p_particlePanel.enabled = false;
+			tw_particleSettingPanel.visible = true;
+			openPanelByScaleUsingFunc( tw_particleSettingPanel );
+		}
+		
+		private function closeParticleSettingPanel():void {
+			closePanelByScaleUsingFunc( tw_particleSettingPanel, function():void {
+				tw_particleSettingPanel.visible = false;
+				p_particlePanel.enabled = true;
+				fc.visible = true;
+			});
+		}
+		
+		private function openLoadingPanel():void {
+			fc.visible = false;
+			p_particlePanel.enabled = false;
+			tw_loadingPanel.visible = true;
+			openPanelByScaleUsingFunc( tw_loadingPanel );
+		}
+		
+		private function closeLoadingPanel():void {
+			_dp_loadingList.removeAll();
+			closePanelByScaleUsingFunc( tw_loadingPanel, function():void {
+				tw_loadingPanel.visible = false;
+				p_particlePanel.enabled = true;
+				fc.visible = true;
+			});
+			//ti_loadName.text = '';
+		}
+		
+		private function openDataPanel():void {
+			fc.visible = false;
+			p_particlePanel.enabled = false;
+			tw_dataPanel.visible = true;
+			openPanelByScaleUsingFunc( tw_dataPanel );
+		}
+		
+		private function closeDataPanel():void {
+			closePanelByScaleUsingFunc( tw_dataPanel, function():void {
+				tw_dataPanel.visible = false;
+				p_particlePanel.enabled = true;
+				fc.visible = true;
+			});
+		}
+		
+		private function onBtnAddTextureClick( e:MouseEvent ):void {
+			_entry.addTexture();
+		}
+		
+		private function onBtnImportClick( e:MouseEvent ):void {
+			getList();
+		}
+		
+		private function onBtnImportLocalClick( e:MouseEvent ):void {
+			var fr:FileReference = new FileReference();
+			fr.browse( [ new FileFilter( 'Txt', '*.txt' ) ]); 
+			fr.addEventListener(Event.SELECT, function( e:Event ):void {
+				fr.load();
+				fr.addEventListener(Event.COMPLETE, function( e2:Event ):void {
+					var retStr:String = fr.data.toString();
+					var retObj:Object = JSON.parse( retStr );
+					parserSetting( retObj );
+					
+				});
+			});
+		}
+		
+		private function getList():void {
+			var ur:URLRequest = new URLRequest( _getListUrl );
+			loadPHP( ur );
+		}
+		
+		private function parserSetting( particleSettingObject:Object ):void {
+			closeDataPanel();
+			closeLoadingPanel();
+			removeAllTextures();
+				
+			_currentLevel = particleSettingObject.level;
+			ddl_createType.selectedIndex = _currentLevel;
+			cp_backgroundColor.selectedColor = particleSettingObject.backgroundColor;
+			onCpClick( null );
+			if ( _currentLevel == 0 ) {
+				createTypeA();
+			}else {
+				createTypeB();
+			}
+			_entry.setSetting( particleSettingObject );
+			setValueToPanel( _entry.getParticle() );
+			
+			if ( particleSettingObject.textures != null ) {
+				var ary_t:Array = particleSettingObject.textures;
+				var i:int = 0;
+				var max:int = ary_t.length;
+				var base64Str:String;
+				for (; i < max; ++i ) {
+					base64Str = ary_t[i];
+					decodePNG( base64Str );
+				}
+				LoaderQueue.inst.start();
+			}
+		}
+		
+		private function onBtnExportClick( e:MouseEvent ):void {
+			if ( ti_saveName.text.length == 0 ) {
+				Alert.show( "請輸入儲存名稱" );
+				return;
+			}
+			
+			openParticleSettingPanel();
+			
+			var settingForSave:Object = { };
+			var treeLevel:int = ddl_createType.selectedIndex;
+			switch( treeLevel ) {
+				case 0:
+					settingForSave.particleSetting = _entry.getEmitter().getSettingUsingObject();
+					break;
+				case 1:
+					settingForSave.particleSetting = _entry.getEmitter2().getSettingUsingObject();
+					break;
+			}
+			var ary_textures:Vector.<BitmapData> = _entry.getTextures();
+			if ( ary_textures != null ) {
+				saveTextures();
+			}
+			settingForSave.saveName = ti_saveName.text;
+			settingForSave.level = treeLevel;
+			settingForSave.backgroundColor = cp_backgroundColor.selectedColor;
+			ta_particleSetting.text = JSON.stringify( settingForSave );
+			
+			function saveTextures():void {
+				var base64:Base64Encoder = new Base64Encoder();
+				settingForSave.textures = [];
+				var i:int = 0;
+				var max:int = ary_textures.length;
+				for ( ; i < max; ++i ) {
+					var bd:BitmapData = ary_textures[i];
+					var pe:PNGEncoder = new PNGEncoder();
+					base64.encodeBytes( pe.encode( bd ) );
+					settingForSave.textures.push( base64.toString() );
+				}
+			}
+		}	
+		
+		private function onBtnSaveClick( e:MouseEvent ):void {
+			if ( cb_saveToServer.selected ) {
+				saveToServer();
+			}else{
+				var fr:FileReference = new FileReference();
+				fr.save( ta_particleSetting.text, ti_saveName.text + '.txt' );
+			}
+		}
+		
+		private function onBtnLoadClick( e:MouseEvent ):void {
+			loadData();
+		}
+		
+		private function onBtnClearDataClick( e:MouseEvent ):void {
+			Alert.show( '確定要刪除嗎？', '', Alert.YES | Alert.NO, null, alertCloseHandler );
+			
+			function alertCloseHandler( ae:CloseEvent):void {
+				switch( ae.detail ) {
+					case 1:
+						confirmToDelete();
+						break;
+				}
+			}
+			
+			function confirmToDelete():void {
+				var ur:URLRequest = new URLRequest( _deleteDataUrl );
+				var ua:URLVariables = new URLVariables();
+				ua.name = lbl_dataName.text;
+				ur.data = ua;
+				ur.method = URLRequestMethod.POST;
+				loadPHP( ur );
+			}
+		}
+		
+		private function loadData():void {
+			var ur:URLRequest = new URLRequest( _getDataUrl );
+			var ua:URLVariables = new URLVariables();
+			ua.name = lbl_dataName.text;
+			ur.data = ua;
+			ur.method = URLRequestMethod.POST;
+			loadPHP( ur );
+		}
+		
+		private function onBtnResetClick( e:MouseEvent ):void {
+			onDdlCreateTypeChange( null );
+			removeAllTextures();
+		}
+		
+		private function removeAllTextures():void {
+			_dp_textureList.removeAll();
+			_entry.removeAllTextures();
+		}
+		
+		private function saveToServer():void {
+			var ua:URLVariables = new URLVariables();
+			var ur:URLRequest = new URLRequest( _saveDataUrl );
+			ua.jsonStr = ta_particleSetting.text;
+			ur.data = ua;
+			ur.method = URLRequestMethod.POST;
+			loadPHP( ur );
+		}
+		
+		private function loadPHP( ur:URLRequest ):void {
+			var ul:URLLoader = new URLLoader();
+			ul.load( ur );
+			ul.addEventListener(Event.COMPLETE, onSaveComplete );
+			this.enabled = false;
+		}
+		
+		private function onSaveComplete( e:Event ):void {
+			this.enabled = true;
+			var ul:URLLoader = URLLoader( e.currentTarget );
+			ul.removeEventListener( Event.COMPLETE, onSaveComplete );
+			var retStr:* = ul.data;
+			//trace( retStr );
+			try{
+				var retObj:Object = JSON.parse( retStr );
+			}catch ( e:Error ) {
+				Alert.show( '解析失敗! ' + retStr );
+				return;
+			}
+			
+			if ( retObj == null || retObj.state == null ) {
+				Alert.show( '執行失敗, 回傳格式不正確!' + retStr );
+				return;
+			}
+			
+			if ( retObj.state == 'false' ) {
+				Alert.show( '執行失敗, 訊息: ' + retObj.msg );
+				return;
+			}
+			
+			switch( retObj.id ) {
+				case _saveDataPhpName:
+					onSaveData();
+					break;
+				case _getDataPhpName:
+					Alert.show( '資料讀取成功!' );
+					onGetData();
+					break;
+				case _getListPhpName:
+					onGetList();
+					break;
+				case _deleteDataName:
+					onDeleteData();
+					break;
+				case _unknownError:
+					Alert.show( '未知錯誤!' );
+					break;
+				case _noDeleteNameError:
+					Alert.show( '沒有這個存檔，請輸入別的名稱: ' + lbl_dataName.text );
+					break;
+				case _noSaveNameError:
+					Alert.show( '沒有這個存檔，請輸入別的名稱: ' + lbl_dataName.text );
+					//ti_loadName.text = '';
+					break;
+				case _noDataError:
+					Alert.show( '沒有任何存檔.' );
+					break;
+			}
+			
+			function onSaveData():void {
+				ti_saveName.text = '';
+				closeParticleSettingPanel();
+				Alert.show( '檔案名稱: ' + ti_saveName.text + ' ,儲存成功!.' );
+			}
+			
+			function onDeleteData():void {
+				Alert.show( '刪除成功!' );
+				closeLoadingPanel();
+				closeDataPanel();
+			}
+			
+			function onGetData():void {
+				parserSetting( retObj.content );
+			}
+			
+			function onGetList():void {
+				var ary_name:Array = retObj.content as Array;
+				var i:int = 0;
+				var max:int = ary_name.length;
+				for (; i < max; ++i ) {
+					_dp_loadingList.addItem( { id:i + 1, name:ary_name[i] } );
+				}
+				openLoadingPanel();
+			}
+		}
+		
+		private function decodePNG( base64Str:String ):void {
+			var base64Encoder:Base64Decoder = new Base64Decoder();
+			base64Encoder.decode( base64Str );
+			var byteAry:ByteArray = base64Encoder.toByteArray();
+			LoaderQueue.inst.addTask( byteAry );
+		}
+		
+		private function onNsForcePowerChange( e:Event ):void {
+			_currentForce.power = ns_forcePowerInEditForce.value;
+			setForceToPanel( getCurrentLevel() );
+		}
+		
+		private function onDgForceListClick( e:MouseEvent ):void {
+			var fid:int = dg_forceList.selectedIndex;
+			if ( fid != -1 ) {
+				tw_editForce.visible = true;
+				var fn:String = dg_forceList.selectedItem.name;
+				var p:Number = dg_forceList.selectedItem.power;
+				//因為datagrid可以點名稱來換item的順序，所以要取得他們創建時的序號才會準
+				fid = dg_forceList.selectedItem.fid;
+				tw_editForce.title = '編輯: ' + fn;
+				ns_forcePowerInEditForce.value = p;
+				
+				openEditForcePanel();
+				_currentForce = getCurrentLevel().getForce()[fid];
+			}
+		}
+		
+		private function onDgTextureListClick( e:MouseEvent ):void {
+			var tid:int = dg_textureList.selectedIndex;
+			if ( tid != -1 ) {
+				lbl_textureName.text = dg_textureList.selectedItem.name;
+				//_currentTextureId = dg_textureList.selectedItem.tid;
+				_currentTextureId = tid;
+				_currentTexture = dg_textureList.selectedItem.bd;
+				openDeleteTexturePanel();
+			}
+		}
+		
+		private function onDgLoadingListClick( e:MouseEvent ):void {
+			var tid:int = dg_loadingList.selectedIndex;
+			var loadName:String;
+			if ( tid != -1 ) {
+				loadName = dg_loadingList.selectedItem.name;
+				lbl_dataName.text = loadName;
+				//ti_loadName.text = loadName;
+				openDataPanel();
+			}
+		}
+		
+		private function setValueToPanel( p:Particle ):void {			
+			ssr_deagAge.value = p.deadAge;
+			ssr_rdeagAge.value = p.random_deadAge;
+			ssr_scaleIn.value = p.scaleIn;
+			ssr_scaleOut.value = p.scaleOut;
+			ssr_alphaIn.value = p.alphaIn;
+			ssr_alphaOut.value = p.alphaOut;
+			ssr_rposx.value = p.random_pos.x;
+			ssr_rposy.value = p.random_pos.y;
+			ssr_rposz.value = p.random_pos.z;
+			ssr_velx.value = p.vel.x;
+			ssr_vely.value = p.vel.y;
+			ssr_velz.value = p.vel.z;
+			ssr_rvelx.value = p.random_vel.x;
+			ssr_rvely.value = p.random_vel.y;
+			ssr_rvelz.value = p.random_vel.z;
+			ssr_sizex.value = p.scale.x;
+			ssr_sizey.value = p.scale.y;
+			ssr_sizez.value = p.scale.z;
+			ssr_rsizex.value = p.random_scale.x;
+			ssr_rsizey.value = p.random_scale.y;
+			ssr_rsizez.value = p.random_scale.z;
+			ssr_rotx.value = p.rotation.x;
+			ssr_roty.value = p.rotation.y;
+			ssr_rotz.value = p.rotation.z;
+			ssr_rrotx.value = p.random_rotation.x;
+			ssr_rroty.value = p.random_rotation.y;
+			ssr_rrotz.value = p.random_rotation.z;
+			ssr_rotVelx.value = p.rotVel.x;
+			ssr_rotVelz.value = p.rotVel.y;
+			ssr_rotVelz.value = p.rotVel.z;
+			ns_textureId.value = p.textureId;
+			cb_visible.selected = !p.visible;
+			switch( p.textureMode ) {
+				case 'normal':
+					ddl_blendMode.selectedIndex = 0; break;
+				case 'add':
+					ddl_blendMode.selectedIndex = 1; break;
+			}
+			setForceToPanel( p );
+		}
+		
+		private function setForceToPanel( p:Particle ):void {
+			_dp_forceList.removeAll();
+			
+			var ary_force:Vector.<Force> = p.getForce();
+			if ( ary_force != null ) {
+				var i:int = 0;
+				var max:int = ary_force.length;
+				for (; i < max; ++i ) {
+					var f:Force = ary_force[i];
+					//因為datagrid可以點名稱來換item的順序，所以要創建他們的序號來用
+					var fid:int = i;
+					_dp_forceList.addItem( {name:f.cname, power:f.power, fid:fid } );
+				}
+			}
+		}
+		
+		private function onAllSsrChange( name:String, value:Number):void {
+			var p:Particle = getCurrentLevel();
+			switch( name ) {
+				case 'ssr_deagAge':
+					p.deadAge = ssr_deagAge.value; break;
+				case 'ssr_rdeagAge':
+					p.random_deadAge = ssr_rdeagAge.value; break;
+				case 'ssr_scaleIn':
+					p.scaleIn = ssr_scaleIn.value; break;
+				case 'ssr_scaleOut':
+					p.scaleOut = ssr_scaleOut.value; break;
+				case 'ssr_alphaIn':
+					p.alphaIn = ssr_alphaIn.value; break;
+				case 'ssr_alphaOut':
+					p.alphaOut = ssr_alphaOut.value; break;
+					
+				case 'ssr_rposx':
+					p.random_pos.x = ssr_rposx.value; break;
+				case 'ssr_rposy':
+					p.random_pos.y = ssr_rposy.value; break;
+				case 'ssr_rposz':
+					p.random_pos.z = ssr_rposz.value; break;
+					
+				case 'ssr_velx':
+					p.vel.x = ssr_velx.value; break;
+				case 'ssr_vely':
+					p.vel.y = ssr_vely.value; break;
+				case 'ssr_velz':
+					p.vel.z = ssr_velz.value; break;
+				case 'ssr_rvelx':
+					p.random_vel.x = ssr_rvelx.value; break;
+				case 'ssr_rvely':
+					p.random_vel.y = ssr_rvely.value; break;
+				case 'ssr_rvelz':
+					p.random_vel.z = ssr_rvelz.value; break;
+					
+				case 'ssr_sizex':
+					p.scale.x = ssr_sizex.value; break;
+				case 'ssr_sizey':
+					p.scale.y = ssr_sizey.value; break;
+				case 'ssr_sizez':
+					p.scale.z = ssr_sizez.value; break;
+				case 'ssr_rsizex':
+					p.random_scale.x = ssr_rsizex.value; break;
+				case 'ssr_rsizey':
+					p.random_scale.y = ssr_rsizey.value; break;
+				case 'ssr_rsizez':
+					p.random_scale.z = ssr_rsizez.value; break;
+					
+				case 'ssr_rotx':
+					p.rotation.x = ssr_rotx.value; break;
+				case 'ssr_roty':
+					p.rotation.y = ssr_roty.value; break;
+				case 'ssr_rotz':
+					p.rotation.z = ssr_rotz.value; break;
+				case 'ssr_rrotx':
+					p.random_rotation.x = ssr_rrotx.value; break;
+				case 'ssr_rroty':
+					p.random_rotation.y = ssr_rroty.value; break;
+				case 'ssr_rrotz':
+					p.random_rotation.z = ssr_rrotz.value; break;
+					
+				case 'ssr_rotVelx':
+					p.rotVel.x = ssr_rotVelx.value; break;
+				case 'ssr_rotVely':
+					p.rotVel.y = ssr_rotVely.value; break;
+				case 'ssr_rotVelz':
+					p.rotVel.z = ssr_rotVelz.value; break;
+					
+				case 'ns_textureId':
+					p.textureId = ns_textureId.value; break;
+			}
+		}
+		
+		private function onNsTidChange( e:Event ):void {
+			var p:Particle = getCurrentLevel();
+			p.textureId = ns_textureId.value;
+		}		
+		
+		private function onCpClick( e:Event ):void {
+			var color:Number = cp_backgroundColor.selectedColor;
+			setStyle( 'backgroundColor', color );
+		}
+		
+		private function onDdlParticleTreeChange( e:Event ):void {
+			_currentLevel = ddl_particleTree.selectedItem.value;
+			switch( _currentLevel ) {
+				case 0:
+					setValueToPanel( _entry.getParticle() );
+					break;
+				case 1:
+					setValueToPanel( _entry.getEmitter() );
+					break;
+				case 2:
+					setValueToPanel( _entry.getEmitter2() );
+			}
+		}
+		
+		private function onCbVisibleChange( e:Event ):void {
+			getCurrentLevel().visible = !cb_visible.selected;
+		}
+		
+		private function getCurrentLevel():Particle {
+			switch( _currentLevel ) {
+				case 0:
+					return _entry.getParticle();
+				case 1:
+					return _entry.getEmitter();
+				case 2:
+					return _entry.getEmitter2();
+			}
+			return null;
+		}
+		
+		private function openPanelByScaleUsingFunc( target:* ):void {
+			openPanelByScale.target = target;
+			openPanelByScale.play();
+		}
+		
+		private function closePanelByScaleUsingFunc( target:*, cb:Function ):void {
+			closePanelByScale.target = target;
+			closePanelByScale.addEventListener(EffectEvent.EFFECT_END, effend );
+			closePanelByScale.play();
+			
+			function effend():void {
+				closePanelByScale.removeEventListener(EffectEvent.EFFECT_END, effend );
+				cb();
+			}
+		}
+		
+		[Bindable]
+		private var _dp_forceSelectItem:ArrayCollection = new ArrayCollection([
+			{ label:'重力', className:'org.vic.particle.force.GravityForce'},
+			{ label:'阻力', className:'org.vic.particle.force.DragForce' }
+		]);
+		
+		[Bindable]
+		private var _particleTreeA:mx.collections.ArrayCollection = new mx.collections.ArrayCollection([
+			{ label:'粒子', value:0},
+			{ label:'發射器', value:1}
+		]);
+		[Bindable]
+		private var _particleTreeB:mx.collections.ArrayCollection = new mx.collections.ArrayCollection([
+			{ label:'粒子', value:0},
+			{ label:'子發射器', value:1},
+			{ label:'母發射器', value:2}
+		]);
+		[Bindable]
+		private var _dp_forceList:ArrayCollection = new ArrayCollection();
+		[Bindable]
+		private var _dp_textureList:ArrayCollection = new ArrayCollection();
+		[Bindable]
+		private var _dp_loadingList:ArrayCollection = new ArrayCollection();
+		[Bindable]
+		private var _ns_width:int = 60;
+		[Bindable]
+		private var _ns_forceWidth:int = 80;
+		]]>
+	</fx:Script>
+	<s:Panel id="p_particlePanel" title="幽夢幻境-粒子編輯器">
+		<s:BorderContainer>
+			<s:VGroup paddingLeft="5" paddingTop="5" paddingRight="5" paddingBottom="5">
+				<s:HGroup>
+					<s:VGroup>
+						<s:Label>發射種類</s:Label>
+						<s:DropDownList id="ddl_createType" width="120" selectedIndex="0" change="onDdlCreateTypeChange(event)">
+							<mx:ArrayCollection>
+								<fx:Object label="粒子"></fx:Object>
+								<fx:Object label="粒子發射粒子"></fx:Object>
+							</mx:ArrayCollection>
+						</s:DropDownList>
+					</s:VGroup>
+					<s:VGroup>
+						<s:Label>當前選擇</s:Label>
+						<s:DropDownList id="ddl_particleTree" width="100" change="onDdlParticleTreeChange(event)"></s:DropDownList>
+					</s:VGroup>
+					<s:VGroup>
+						<s:Label>重新創建粒子</s:Label>
+						<s:Button click="onBtnResetClick(event)">確定</s:Button>
+					</s:VGroup>
+				</s:HGroup>
+				<s:Scroller height="340">
+					<s:Group>
+						<s:VGroup id="sliderContainer">
+							<client:StepSlider id="ssr_deagAge"/>
+							<client:StepSlider id="ssr_rdeagAge"/>
+							<client:StepSlider id="ssr_scaleIn"/>
+							<client:StepSlider id="ssr_scaleOut"/>
+							<client:StepSlider id="ssr_alphaIn"/>
+							<client:StepSlider id="ssr_alphaOut"/>
+							<client:StepSlider id="ssr_rposx"/>
+							<client:StepSlider id="ssr_rposy"/>
+							<client:StepSlider id="ssr_rposz"/>
+							<client:StepSlider id="ssr_velx"/>
+							<client:StepSlider id="ssr_vely"/>
+							<client:StepSlider id="ssr_velz"/>
+							<client:StepSlider id="ssr_rvelx"/>
+							<client:StepSlider id="ssr_rvely"/>
+							<client:StepSlider id="ssr_rvelz"/>
+							<client:StepSlider id="ssr_sizex"/>
+							<client:StepSlider id="ssr_sizey"/>
+							<client:StepSlider id="ssr_sizez"/>
+							<client:StepSlider id="ssr_rsizex"/>
+							<client:StepSlider id="ssr_rsizey"/>
+							<client:StepSlider id="ssr_rsizez"/>
+							<client:StepSlider id="ssr_rotx"/>
+							<client:StepSlider id="ssr_roty"/>
+							<client:StepSlider id="ssr_rotz"/>
+							<client:StepSlider id="ssr_rrotx"/>
+							<client:StepSlider id="ssr_rroty"/>
+							<client:StepSlider id="ssr_rrotz"/>
+							<client:StepSlider id="ssr_rotVelx"/>
+							<client:StepSlider id="ssr_rotVely"/>
+							<client:StepSlider id="ssr_rotVelz"/>
+						</s:VGroup>
+					</s:Group>
+				</s:Scroller>
+				<s:HGroup>
+					<s:CheckBox id="cb_visible" change="onCbVisibleChange(event)">不可見</s:CheckBox>
+					<s:NumericStepper id="ns_textureId" maximum="10" minimum="-1" stepSize="1" width="{_ns_width}" change="onNsTidChange(event)"></s:NumericStepper>
+					<s:Label>材質id</s:Label>
+					<s:DropDownList id="ddl_blendMode" change="onDdlBlendModeChange(event)" width="{_ns_width + 25}" labelField="name" selectedIndex="0">
+						<mx:ArrayCollection>
+							<fx:Object name="普通" value="normal"></fx:Object>
+							<fx:Object name="疊加" value="add"></fx:Object>
+						</mx:ArrayCollection>
+					</s:DropDownList>
+					<s:Label>混合模式</s:Label>
+				</s:HGroup>
+				<s:HGroup>
+					<mx:ColorPicker id="cp_backgroundColor" selectedColor="0x666666" change="onCpClick(event)"></mx:ColorPicker>
+					<s:Label>背景顏色</s:Label>
+					<s:Button width="110" click="tw_forcePanel.visible=true;openForcePanel()">加入作用力</s:Button>
+					<s:Button width="110" click="onBtnAddTextureClick(event)">加入貼圖</s:Button>
+				</s:HGroup>
+				<s:DataGrid id="dg_forceList" click="onDgForceListClick(event)" width="100%" dataProvider="{_dp_forceList}">
+					<s:columns>
+						<mx:ArrayList>
+							<s:GridColumn headerText="作用力名稱" dataField="name"></s:GridColumn>
+							<s:GridColumn headerText="強度" dataField="power"></s:GridColumn>
+						</mx:ArrayList>
+					</s:columns>
+				</s:DataGrid>
+				<s:DataGrid id="dg_textureList" width="100%" click="onDgTextureListClick(event)" dataProvider="{_dp_textureList}">
+					<s:columns>
+						<mx:ArrayList>
+							<s:GridColumn headerText="貼圖id" dataField="tid"></s:GridColumn>
+							<s:GridColumn headerText="貼圖名稱" dataField="name"></s:GridColumn>
+							<s:GridColumn headerText="貼圖大小" dataField="size"></s:GridColumn>
+						</mx:ArrayList>
+					</s:columns>
+				</s:DataGrid>
+				<s:HGroup>
+					<s:Button width="150" click="onBtnImportLocalClick(event)">本地匯入</s:Button>
+					<s:Button width="150" click="onBtnImportClick(event)">伺服器匯入</s:Button>
+				</s:HGroup>
+				<s:HGroup>
+					<s:Label>儲存名稱</s:Label>
+					<s:TextInput id="ti_saveName"></s:TextInput>
+					<s:Button width="120" click="onBtnExportClick(event)">輸出</s:Button>
+				</s:HGroup>
+			</s:VGroup>
+		</s:BorderContainer>
+	</s:Panel>
+	<s:TitleWindow id="tw_forcePanel" title="創建作用力" close="closeForcePanel()" visible="false" horizontalCenter="1" verticalCenter="1">
+		<s:BorderContainer width="100%" height="100%">
+			<s:VGroup paddingTop="5" paddingLeft="5" paddingRight="5" paddingBottom="5">
+				<s:HGroup>
+					<s:NumericStepper id="ns_forcePower" maximum="1" minimum=".1" stepSize=".1" value="0" width="{_ns_forceWidth}"></s:NumericStepper>
+					<s:Label>強度</s:Label>
+				</s:HGroup>
+				<s:HGroup>
+					<s:DropDownList id="ddl_forceType" selectedIndex="0" dataProvider="{_dp_forceSelectItem}" width="{_ns_forceWidth}"></s:DropDownList>
+					<s:Label>種類</s:Label>
+				</s:HGroup>
+				<s:Button width="100%" click="onBtnAddForceClick(event)">創建</s:Button>
+			</s:VGroup>
+		</s:BorderContainer>
+	</s:TitleWindow>
+	<s:TitleWindow id="tw_editForce" visible="false" close="closeEditForcePanel()" horizontalCenter="1" verticalCenter="1">
+		<s:BorderContainer width="100%" height="100%">
+			<s:VGroup paddingTop="5" paddingLeft="5" paddingRight="5" paddingBottom="5">
+				<s:HGroup>
+					<s:Label>強度:</s:Label>
+					<s:NumericStepper id="ns_forcePowerInEditForce" change="onNsForcePowerChange(event)" maximum="1" minimum=".1" stepSize=".1"></s:NumericStepper>
+				</s:HGroup>
+				<s:Button width="100%" click="closeEditForcePanel();getCurrentLevel().removeForce(_currentForce);setForceToPanel( getCurrentLevel())">刪除</s:Button>
+			</s:VGroup>
+		</s:BorderContainer>
+	</s:TitleWindow>
+	<s:TitleWindow id="tw_deleteTexturePanel" title="刪除這張貼圖" close="closeDeleteTexturePanel()" visible="false" horizontalCenter="1" verticalCenter="1">
+		<s:BorderContainer width="100%" height="100%">
+			<s:VGroup paddingTop="5" paddingLeft="5" paddingRight="5" paddingBottom="5">
+				<s:Label id="lbl_textureName"></s:Label>
+				<s:Button width="100%" click="onBtnDeleteClick(event)">確定</s:Button>
+			</s:VGroup>
+		</s:BorderContainer>
+	</s:TitleWindow>
+	<s:TitleWindow id="tw_particleSettingPanel" horizontalCenter="1" verticalCenter="1" close="closeParticleSettingPanel()" title="粒子設定" visible="false">
+		<s:BorderContainer>
+			<s:VGroup>
+				<s:HGroup paddingLeft="5" paddingTop="5" paddingBottom="5" horizontalAlign="center">
+					<s:CheckBox id="cb_saveToServer" x="320" y="-25" enabled="false">存入伺服器</s:CheckBox>
+					<s:Button click="onBtnSaveClick(event)">儲存檔案</s:Button>
+				</s:HGroup>
+				<s:TextArea id="ta_particleSetting" width="600" height="580" ></s:TextArea>
+			</s:VGroup>
+		</s:BorderContainer>
+	</s:TitleWindow>
+	<s:TitleWindow id="tw_loadingPanel" horizontalCenter="1" verticalCenter="1" close="closeLoadingPanel()" title="檔案列表" visible="false">
+		<s:DataGrid id="dg_loadingList" dataProvider="{_dp_loadingList}" click="onDgLoadingListClick(event)">
+			<s:columns>
+				<mx:ArrayList>
+					<s:GridColumn width="50" headerText="序號" dataField="id"></s:GridColumn>
+					<s:GridColumn width="100" headerText="檔案名稱" dataField="name"></s:GridColumn>
+				</mx:ArrayList>
+			</s:columns>
+		</s:DataGrid>
+	</s:TitleWindow>
+	<s:TitleWindow id="tw_dataPanel" horizontalCenter="1" verticalCenter="1" close="closeDataPanel()" title="資料" visible="false">
+		<s:BorderContainer>
+			<s:Scroller height="100">
+				<s:Group>
+					<s:VGroup paddingLeft="5" paddingTop="5" paddingBottom="5" paddingRight="5">
+						<s:Label>檔案名稱: </s:Label>
+						<s:Label id="lbl_dataName"></s:Label>
+						<s:Button click="onBtnLoadClick(event)">讀取</s:Button>
+						<!--
+						<s:Button click="onBtnClearDataClick(event)">刪除</s:Button>
+						-->
+					</s:VGroup>
+				</s:Group>
+			</s:Scroller>
+		</s:BorderContainer>
+	</s:TitleWindow>
+	<mx:UIComponent id="fc"></mx:UIComponent>
+</s:Application>
